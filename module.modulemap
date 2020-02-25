@@ -1,0 +1,5 @@
+module swift_lz4 [system] {
+  header "/usr/include/swift_lz4.h"
+  link "swift_lz4"
+  export *
+}
