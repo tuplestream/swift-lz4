@@ -1,0 +1,5 @@
+module lz4
+{
+    umbrella header "lz4.h"
+    link "lz4"
+}
