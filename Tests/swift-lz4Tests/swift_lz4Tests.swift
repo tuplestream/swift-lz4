@@ -1,7 +1,7 @@
 import XCTest
 import class Foundation.Bundle
 
-final class swift_lz4_runnerTests: XCTestCase {
+final class swift_lz4Tests: XCTestCase {
     func testExample() throws {
         // This is an example of a functional test case.
         // Use XCTAssert and related functions to verify your tests produce the correct
@@ -12,7 +12,7 @@ final class swift_lz4_runnerTests: XCTestCase {
             return
         }
 
-        let fooBinary = productsDirectory.appendingPathComponent("swift-lz4-runner")
+        let fooBinary = productsDirectory.appendingPathComponent("swift-lz4")
 
         let process = Process()
         process.executableURL = fooBinary
