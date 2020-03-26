@@ -1,7 +1,8 @@
 import XCTest
 
-import swift_lz4Tests
+import LZ4Tests
 
 var tests = [XCTestCaseEntry]()
-tests += swift_lz4Tests.allTests()
+tests += LZ4Tests.__allTests()
+
 XCTMain(tests)

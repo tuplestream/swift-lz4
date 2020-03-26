@@ -7,9 +7,11 @@
 
 import Foundation
 import Logging
-import lz4
+import lz4Native
 
-public class LZ4FrameOutputStream : OutputStream {
+public final class LZ4FrameOutputStream : OutputStream {
+
+    private let logger = Logger(label: "LZ4")
 
     private let bufferSize: Int
     private let frameInfo: LZ4F_frameInfo_t
@@ -21,7 +23,12 @@ public class LZ4FrameOutputStream : OutputStream {
     private var outputBuffer: UnsafeMutablePointer<UInt8>
     private let sink: OutputStream
 
-    init(sink: OutputStream, bufferSize: Int) {
+    public override convenience required init(toMemory: ()) {
+        let os = OutputStream(toMemory: ())
+        self.init(sink: os)
+    }
+
+    public init(sink: OutputStream, bufferSize: Int = 1024 * 32) {
         self.bufferSize = bufferSize
         self.frameInfo = LZ4F_frameInfo_t(blockSizeID: LZ4F_max256KB, blockMode: LZ4F_blockLinked, contentChecksumFlag: LZ4F_noContentChecksum, frameType: LZ4F_frame, contentSize: 0, dictID: 0, blockChecksumFlag: LZ4F_noBlockChecksum)
         self.prefs = LZ4F_preferences_t(frameInfo: frameInfo, compressionLevel: 0, autoFlush: 0, favorDecSpeed: 0, reserved: (0,0,0))
@@ -30,8 +37,7 @@ public class LZ4FrameOutputStream : OutputStream {
         self.ctx = UnsafeMutablePointer<OpaquePointer?>.allocate(capacity: MemoryLayout<LZ4F_compressionContext_t>.size)
         let creation = LZ4F_createCompressionContext(ctx, UInt32(LZ4F_VERSION))
         if LZ4F_isError(creation) != 0 {
-            print("Couldn't create context")
-            exit(1)
+            logger.critical("Couldn't create context")
         }
         self.headerWritten = false
         self.outputBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: outBufCapacity)
@@ -45,27 +51,37 @@ public class LZ4FrameOutputStream : OutputStream {
         if !headerWritten {
             headerSize = LZ4F_compressBegin(ctx.pointee, outputBuffer, outBufCapacity, &prefs)
             if LZ4F_isError(headerSize) != 0 {
-                print("oh noes, couldn't write header")
+                logger.critical("Unable to generate LZ4 header")
+                return -1
+            }
+
+            let written = sink.write(outputBuffer, maxLength: headerSize)
+            if written <= 0 {
+                // header write failed
+                logger.warning("Unable to write LZ4 header!")
+                return written
             }
             headerWritten = true
-            sink.write(outputBuffer, maxLength: headerSize)
         }
 
         let compressed = LZ4F_compressUpdate(ctx.pointee, outputBuffer, outBufCapacity, buffer, len, nil)
         if LZ4F_isError(compressed as LZ4F_errorCode_t) != 0 {
-            print("oh no")
+            logger.error("oh no")
         }
 
         if compressed > 0 {
-            sink.write(outputBuffer, maxLength: compressed)
+            let written = sink.write(outputBuffer, maxLength: compressed)
+            if written <= 0 {
+                return written
+            }
         }
 
         return headerSize + compressed
     }
 
-    func finish() {
+    func finish() -> Int {
         let compressed = LZ4F_compressEnd(ctx.pointee, outputBuffer, outBufCapacity, nil)
-        sink.write(outputBuffer, maxLength: compressed)
+        return sink.write(outputBuffer, maxLength: compressed)
     }
 
     public override func close() {

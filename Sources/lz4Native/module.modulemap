@@ -1,4 +1,4 @@
-module lz4
+module lz4Native
 {
     umbrella header "lz4.h"
     link "lz4"
