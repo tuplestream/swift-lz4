@@ -5,31 +5,49 @@ import LZ4
 final class LZ4Tests: XCTestCase {
 
     func testCompression() {
-        let os = OutputStream(toMemory: ())
-        os.open()
-        let output = LZ4FrameOutputStream(sink: os)
         let inputString = "the quick brown fox jumps over the lazy dog"
-        let bi = UnsafeMutablePointer<UInt8>.allocate(capacity: inputString.count)
+        let size = inputString.utf8.count
+        let inputBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: size)
+
+        inputString.withCString { (baseAddress) in
+            let asUnsigned = UnsafeRawPointer(baseAddress).assumingMemoryBound(to: UInt8.self)
+            inputBuffer.initialize(from: asUnsigned, count: size)
+        }
+        defer {
+            inputBuffer.deallocate()
+        }
+        let outputBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: size)
+        outputBuffer.initialize(repeating: 0, count: size)
+        let os = OutputStream(toBuffer: outputBuffer, capacity: size)
+        os.open()
+
+        let output = LZ4FrameOutputStream(sink: os)
+
+        let w = output.write(inputBuffer, maxLength: size)
+        print("\(w)")
+
+        output.close()
+        os.close()
+    }
+
+    func testDecompression() {
+        let compressedInput = InputStream(fileAtPath: "/Users/cmow0001/os/swift-lz4-runner/Tests/examples/compressed.txt.lz4")
+        compressedInput?.open()
+        let decompressor = LZ4FrameInputStream(source: compressedInput!)
+
+        let size = 1024
+        let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: size)
+        buffer.initialize(repeating: 0, count: size)
+        defer {
+            buffer.deallocate()
+        }
+
+        decompressor.read(buffer, maxLength: size)
     }
 }
 
-//import Foundation
-//
-//let bufSize = 16 * 1024
-//
 //func compressFile(file: String) {
-//
-//    // file descriptors
-//    let fd = fopen(file, "r")
-//
-//    // FD buffers
-//    let bi = UnsafeMutablePointer<UInt8>.allocate(capacity: bufSize)
-//    bi.initialize(repeating: 0, count: bufSize)
-//    defer { if let f = fd {
-//        fclose(fd)
-//        bi.deallocate()
-//    }}
-//
+
 //    let out = OutputStream.init(toFileAtPath: file + ".compressed", append: false)
 //    out?.open()
 //    let os = LZ4FrameOutputStream(sink: out!, bufferSize: bufSize)
