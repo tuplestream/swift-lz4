@@ -1,5 +1,5 @@
 //
-//  lz4.swift
+//  LZ4.swift
 //  
 //
 //  Created by Chris Mowforth on 01/03/2020.
@@ -9,7 +9,7 @@ import Foundation
 import Logging
 import lz4Native
 
-public final class LZ4FrameOutputStream : OutputStream {
+public final class LZ4FrameOutputStream: OutputStream {
 
     private let logger = Logger(label: "LZ4OutputStream")
 
@@ -86,7 +86,7 @@ public final class LZ4FrameOutputStream : OutputStream {
 
     public override func close() {
         if finish() <= 0 {
-            logger.error("Unable to write end of ZL4 stream!")
+            logger.error("Unable to write end of LZ4 stream!")
         }
 
         outputBuffer.deallocate()
@@ -102,6 +102,7 @@ public final class LZ4FrameInputStream {
 
     private var ctx: UnsafeMutablePointer<OpaquePointer?>
     private var outputBuffer: UnsafeMutablePointer<UInt8>
+    private var tmpBuffer: UnsafeMutableRawPointer?
     private var headerRead: Bool
 
     private let source: InputStream
@@ -141,15 +142,22 @@ public final class LZ4FrameInputStream {
             }
 
             let blockSize = try? LZ4FrameInputStream.getBlockSize(frameInfo.pointee)
+//            let dstBuffer = UnsafeMutableRawPointer.allocate(byteCount: blockSize)
 
+            assert(tmpBuffer == nil)
+
+            let dst = malloc(blockSize!)
+            let rp = UnsafeRawPointer(dst)
 
             headerRead = true
         }
 
+        let ret = LZ4F_decompress(ctx.pointee, <#T##dstBuffer: UnsafeMutableRawPointer!##UnsafeMutableRawPointer!#>, <#T##dstSizePtr: UnsafeMutablePointer<Int>!##UnsafeMutablePointer<Int>!#>, <#T##srcBuffer: UnsafeRawPointer!##UnsafeRawPointer!#>, <#T##srcSizePtr: UnsafeMutablePointer<Int>!##UnsafeMutablePointer<Int>!#>, nil)
+
         return 0
     }
 
-    fileprivate static func getBlockSize(_ frameInfo: LZ4F_frameInfo_t) throws -> UInt64 {
+    fileprivate static func getBlockSize(_ frameInfo: LZ4F_frameInfo_t) throws -> Int {
         switch frameInfo.blockSizeID {
         case LZ4F_default, LZ4F_max64KB:
             return 1 << 16
@@ -166,6 +174,9 @@ public final class LZ4FrameInputStream {
 
     public func close() {
         outputBuffer.deallocate()
+        if let b = tmpBuffer {
+            b.deallocate()
+        }
         LZ4F_freeDecompressionContext(ctx.pointee)
     }
 }
