@@ -7,6 +7,7 @@ extension LZ4Tests {
     // to regenerate.
     static let __allTests__LZ4Tests = [
         ("testCompression", testCompression),
+        ("testDecompression", testDecompression),
     ]
 }
 

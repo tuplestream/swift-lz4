@@ -9,6 +9,10 @@ import Foundation
 import Logging
 import lz4Native
 
+public final class LZ4 {
+    public static let defaultBufferSize: Int = 1 << 16
+}
+
 public final class LZ4FrameOutputStream: OutputStream {
 
     private let logger = Logger(label: "LZ4OutputStream")
@@ -28,7 +32,7 @@ public final class LZ4FrameOutputStream: OutputStream {
         self.init(sink: os)
     }
 
-    public init(sink: OutputStream, bufferSize: Int = 1024 * 32) {
+    public init(sink: OutputStream, bufferSize: Int = LZ4.defaultBufferSize) {
         self.bufferSize = bufferSize
         self.headerWritten = false
         self.frameInfo = LZ4F_frameInfo_t(blockSizeID: LZ4F_max256KB, blockMode: LZ4F_blockLinked, contentChecksumFlag: LZ4F_noContentChecksum, frameType: LZ4F_frame, contentSize: 0, dictID: 0, blockChecksumFlag: LZ4F_noBlockChecksum)
@@ -96,68 +100,121 @@ public final class LZ4FrameOutputStream: OutputStream {
 
 public struct BlockFormatError: Error {}
 
-public final class LZ4FrameInputStream {
+public final class LZ4FrameInputStream: Sequence, IteratorProtocol {
+
+    private let headerSize = 7
 
     private let logger = Logger(label: "LZ4InputStream")
 
     private var ctx: UnsafeMutablePointer<OpaquePointer?>
-    private var outputBuffer: UnsafeMutablePointer<UInt8>
-    private var tmpBuffer: UnsafeMutableRawPointer?
     private var headerRead: Bool
 
+    private let scratchbuffer: UnsafeMutablePointer<UInt8>
+    private let iteratorBuffer: UnsafeMutablePointer<UInt8>
+    private let headerBuffer: UnsafeMutablePointer<UInt8>
     private let source: InputStream
-    private let bufferSize: Int
+    private var blockSize: size_t?
+    private var dstSize: size_t
 
-    public init(source: InputStream, bufferSize: Int = 1024 * 32) {
+    public init(source: InputStream) {
         self.ctx = UnsafeMutablePointer<OpaquePointer?>.allocate(capacity: MemoryLayout<LZ4F_compressionContext_t>.size)
         let creation = LZ4F_createDecompressionContext(ctx, UInt32(LZ4F_VERSION))
         if LZ4F_isError(creation) != 0 {
             logger.critical("Couldn't create LZ4F decompression context")
         }
 
-        self.outputBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
-        outputBuffer.initialize(repeating: 0, count: bufferSize)
         self.headerRead = false
         self.source = source
-        self.bufferSize = bufferSize
+        self.headerBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: headerSize)
+        headerBuffer.initialize(repeating: 0, count: headerSize)
+        self.scratchbuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: LZ4.defaultBufferSize)
+        scratchbuffer.initialize(repeating: 0, count: LZ4.defaultBufferSize)
+        self.iteratorBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: LZ4.defaultBufferSize)
+        iteratorBuffer.initialize(repeating: 0, count: LZ4.defaultBufferSize)
+        self.dstSize = 0
+    }
+
+    public func next() -> [UInt8]? {
+        readHeader()
+        var ret = 1
+        let rawAmountRead = source.read(scratchbuffer, maxLength: LZ4.defaultBufferSize)
+
+        if rawAmountRead < 0 {
+            logger.error("Unable to read stream")
+            return nil
+        }
+
+        if rawAmountRead == 0 {
+            logger.debug("Reached end of stream")
+            return nil
+        }
+
+        var srcStartPtr = scratchbuffer
+        let srcEndPtr = scratchbuffer.advanced(by: rawAmountRead)
+        var srcSize = scratchbuffer.distance(to: srcEndPtr)
+
+        while ret != 0 {
+            dstSize = blockSize!
+            ret = LZ4F_decompress(ctx.pointee, iteratorBuffer, &dstSize, srcStartPtr, &srcSize, nil)
+
+            if lz4Error(ret) {
+                return nil
+            }
+
+            if dstSize != 0 {
+                // flush output- TODO
+               return []
+            }
+
+            assert(srcStartPtr.distance(to: srcEndPtr) == 0)
+
+            // allocate a buffer big enough for
+            let bigger = UnsafeMutableBufferPointer<UInt8>.allocate(capacity: ret + srcSize)
+        }
+
+        let _ = lz4Error(ret)
+
+        return nil
     }
 
     public func read(_ buffer: UnsafeMutablePointer<UInt8>, maxLength len: Int) -> Int {
-        let limit = max(bufferSize, len)
-        let rawAmountRead = source.read(outputBuffer, maxLength: limit)
-
-        if rawAmountRead <= 0 {
-            logger.error("Unable to read stream")
-            return rawAmountRead
-        }
-
-        if !headerRead {
-            let consumed = UnsafeMutablePointer<Int>.allocate(capacity: limit)
-            consumed.initialize(to: limit)
-            let frameInfo = UnsafeMutablePointer<LZ4F_frameInfo_t>.allocate(capacity: MemoryLayout<LZ4F_frameInfo_t>.size)
-            let info = LZ4F_getFrameInfo(ctx.pointee, frameInfo, outputBuffer, consumed)
-            if LZ4F_isError(info) != 0 {
-                logger.error("LZ4F_getFrameInfo error: \(LZ4F_getErrorName(info)!)")
-                return -1
-            }
-
-            let blockSize = try? LZ4FrameInputStream.getBlockSize(frameInfo.pointee)
-//            let dstBuffer = UnsafeMutableRawPointer.allocate(byteCount: blockSize)
-
-            assert(tmpBuffer == nil)
-
-            let dst = malloc(blockSize!)
-            let rp = UnsafeRawPointer(dst)
-
-            headerRead = true
-        }
-
-        let ret = LZ4F_decompress(ctx.pointee, <#T##dstBuffer: UnsafeMutableRawPointer!##UnsafeMutableRawPointer!#>, <#T##dstSizePtr: UnsafeMutablePointer<Int>!##UnsafeMutablePointer<Int>!#>, <#T##srcBuffer: UnsafeRawPointer!##UnsafeRawPointer!#>, <#T##srcSizePtr: UnsafeMutablePointer<Int>!##UnsafeMutablePointer<Int>!#>, nil)
-
         return 0
     }
 
-    fileprivate static func getBlockSize(_ frameInfo: LZ4F_frameInfo_t) throws -> Int {
+    private func readHeader() {
+        if headerRead {
+            return
+        }
+
+        let rawAmountRead = source.read(headerBuffer, maxLength: headerSize)
+
+        let frameInfo = UnsafeMutablePointer<LZ4F_frameInfo_t>.allocate(capacity: MemoryLayout<LZ4F_frameInfo_t>.size)
+        let consumed = UnsafeMutablePointer<Int>.allocate(capacity: headerSize)
+        consumed.initialize(to: rawAmountRead)
+        let info = LZ4F_getFrameInfo(ctx.pointee, frameInfo, headerBuffer, consumed)
+        if lz4Error(info) {
+            logger.error("Error reading LZ4 header: \(String(cString: LZ4F_getErrorName(info)))")
+            return
+        }
+
+        self.blockSize = try! LZ4FrameInputStream.getBlockSize(frameInfo.pointee)
+
+        assert(self.blockSize! > 0)
+
+        frameInfo.deallocate()
+        consumed.deallocate()
+        headerRead = true
+    }
+
+    private func lz4Error(_ err: LZ4F_errorCode_t) -> Bool {
+        if LZ4F_isError(err) != 0 {
+            logger.error("LZ4 Frame error: \(String(cString: LZ4F_getErrorName(err)))")
+            return true
+        }
+        return false
+    }
+
+    fileprivate static func getBlockSize(_ frameInfo: LZ4F_frameInfo_t) throws -> size_t {
         switch frameInfo.blockSizeID {
         case LZ4F_default, LZ4F_max64KB:
             return 1 << 16
@@ -173,10 +230,7 @@ public final class LZ4FrameInputStream {
     }
 
     public func close() {
-        outputBuffer.deallocate()
-        if let b = tmpBuffer {
-            b.deallocate()
-        }
+        scratchbuffer.deallocate()
         LZ4F_freeDecompressionContext(ctx.pointee)
     }
 }
