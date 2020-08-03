@@ -31,13 +31,13 @@ class LZ4Tests: XCTestCase {
         let os = OutputStream(toBuffer: outputBuffer, capacity: size * 2)
         os.open()
 
-        let output = LZ4FrameOutputStream(sink: os)
+//        let output = LZ4FrameOutputStream(sink: os)
 
-        let firstWrittenCall = output.write(inputBuffer, maxLength: size)
-        XCTAssertEqual(7, firstWrittenCall) // on first write, we'll just be flushing the header
-
-        output.close()
-        os.close()
+//        let firstWrittenCall = output.write(inputBuffer, maxLength: size)
+//        XCTAssertEqual(7, firstWrittenCall) // on first write, we'll just be flushing the header
+//
+//        output.close()
+//        os.close()
 
 //        let d = Data(buffer: UnsafeMutableBufferPointer(start: outputBuffer, count: output.totalBytesWritten))
 //        let inputStream = InputStream(data: d)
