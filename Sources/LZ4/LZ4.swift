@@ -26,6 +26,7 @@ public final class LZ4FrameOutputStream: OutputStream {
     private var headerWritten: Bool
     private var outputBuffer: UnsafeMutablePointer<UInt8>
     private let sink: OutputStream
+    private var bytesWritten: Int = 0
 
     public override convenience required init(toMemory: ()) {
         let os = OutputStream(toMemory: ())
@@ -48,6 +49,12 @@ public final class LZ4FrameOutputStream: OutputStream {
         outputBuffer.initialize(repeating: 0, count: outBufCapacity)
         self.sink = sink
         super.init(toBuffer: outputBuffer, capacity: outBufCapacity)
+    }
+
+    public var totalBytesWritten: Int {
+        get {
+            return bytesWritten
+        }
     }
 
     public override func write(_ buffer: UnsafePointer<UInt8>, maxLength len: Int) -> Int {
@@ -80,7 +87,9 @@ public final class LZ4FrameOutputStream: OutputStream {
             }
         }
 
-        return headerSize + compressed
+        let total = headerSize + compressed
+        bytesWritten += total
+        return total
     }
 
     private func finish() -> Int {
@@ -89,9 +98,14 @@ public final class LZ4FrameOutputStream: OutputStream {
     }
 
     public override func close() {
-        if finish() <= 0 {
+        let trailer = finish()
+
+        if trailer <= 0 {
             logger.error("Unable to write end of LZ4 stream!")
+            return
         }
+
+        bytesWritten += trailer
 
         outputBuffer.deallocate()
         LZ4F_freeCompressionContext(ctx.pointee)
@@ -176,10 +190,6 @@ public final class LZ4FrameInputStream: Sequence, IteratorProtocol {
         }
 
         return nil
-    }
-
-    public func read(_ buffer: UnsafeMutablePointer<UInt8>, maxLength len: Int) -> Int {
-        return 0
     }
 
     private func readHeader() {
