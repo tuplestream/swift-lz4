@@ -6,8 +6,7 @@ extension LZ4Tests {
     //   `swift test --generate-linuxmain`
     // to regenerate.
     static let __allTests__LZ4Tests = [
-        ("testCompression", testCompression),
-        ("testDecompression", testDecompression),
+        ("testCompressionDecompressionSmallInput", testCompressionDecompressionSmallInput),
     ]
 }
 
