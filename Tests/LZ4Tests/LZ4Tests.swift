@@ -23,7 +23,7 @@ class LZ4Tests: XCTestCase {
             inputBuffer.initialize(from: asUnsigned, count: size)
         }
         defer {
-            inputBuffer.deallocate()
+//            inputBuffer.deallocate()
         }
         let outputBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: size)
         outputBuffer.initialize(repeating: 0, count: size)
