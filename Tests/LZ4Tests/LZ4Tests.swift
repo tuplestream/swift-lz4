@@ -2,18 +2,20 @@ import XCTest
 import class Foundation.Bundle
 import LZ4
 
-extension InputStream {
+extension Array where Element == UInt8 {
 
-    convenience init(_ str: String) {
-        self.init(str.data(using: .utf8))
+    func toString() -> String {
+        return String(bytes: self, encoding: .utf8)!
     }
 }
 
-final class LZ4Tests: XCTestCase {
+class LZ4Tests: XCTestCase {
 
-    func testCompression() {
+    func testCompressionDecompressionSmallInput() {
         let inputString = "the quick brown fox jumps over the lazy dog"
         let size = inputString.utf8.count
+
+        // compression
         let inputBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: size)
 
         inputString.withCString { (baseAddress) in
@@ -23,61 +25,55 @@ final class LZ4Tests: XCTestCase {
         defer {
             inputBuffer.deallocate()
         }
-        let outputBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: size)
+        let outputBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: size * 2)
         outputBuffer.initialize(repeating: 0, count: size)
-        let os = OutputStream(toBuffer: outputBuffer, capacity: size)
+
+        let os = OutputStream(toBuffer: outputBuffer, capacity: size * 2)
         os.open()
 
         let output = LZ4FrameOutputStream(sink: os)
 
-        let w = output.write(inputBuffer, maxLength: size)
-        print("\(w)")
+        let firstWriteCall = output.write(inputBuffer, maxLength: size)
+        XCTAssertEqual(7, firstWriteCall) // on first write, we'll just be flushing the header
 
         output.close()
-        os.close()
-    }
 
-    func testDecompression() {
-        let compressedInput = InputStream("the quick brown fox jumps over the lazy dog")
-        compressedInput?.open()
-        let decompressor = LZ4FrameInputStream(source: compressedInput!)
+        XCTAssertEqual(58, output.totalBytesWritten)
 
-        let size = 1024
-        let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: size)
-        buffer.initialize(repeating: 0, count: size)
+        let d = Data(buffer: UnsafeMutableBufferPointer(start: outputBuffer, count: output.totalBytesWritten))
+        let inputStream = InputStream(data: d)
+        inputStream.open()
+        let decompressor = LZ4FrameInputStream(source: inputStream)
+
         defer {
-            buffer.deallocate()
+            inputStream.close()
+            decompressor.close()
+            outputBuffer.deallocate()
         }
 
-        decompressor.read(buffer, maxLength: size)
+        var outputString = ""
 
+        while let bytes = decompressor.next() {
+            outputString += bytes.toString()
+        }
 
+        // did we get back what we put in?
+        XCTAssertEqual(inputString, outputString)
     }
-}
 
-//func compressFile(file: String) {
-
-//    let out = OutputStream.init(toFileAtPath: file + ".compressed", append: false)
-//    out?.open()
-//    let os = LZ4FrameOutputStream(sink: out!, bufferSize: bufSize)
+//    func testDecompression() {
+//        let file = InputStream(fileAtPath: "/Users/chris/Desktop/install.log.lz4")!
+//        file.open()
 //
-//    while true {
-//        let read = fread(bi, 1, bufSize, fd)
-//        if read == 0 {
-//            break
+//        let decompressor = LZ4FrameInputStream(source: file)
+//
+//        var outputString = ""
+//
+//        while let decompressedBytes = decompressor.next() {
+//            outputString += decompressedBytes.toString()
 //        }
 //
-//        os.write(bi, maxLength: read)
+//        file.close()
+//        decompressor.close()
 //    }
-//
-//    os.finish()
-//    os.close()
-//    out?.close()
-//
-////    let tailSize = LZ4F_compressEnd(ctx.pointee, bo, outBufCapacity, nil)
-////    print("\(tailSize)")
-//
-////    fwrite(bo, 1, tailSize, targetFd)
-//}
-//
-//compressFile(file: "/Users/cmow0001/Desktop/testing.log")
+}

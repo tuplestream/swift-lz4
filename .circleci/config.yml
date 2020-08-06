@@ -6,7 +6,7 @@ jobs:
       - image: tuplestream/swift-env:latest
     steps:
       - checkout
-      - run: swift test
+      - run: swift test --verbose
   validate:
     docker:
       - image: m0wfo/tailor:0.12.0
