@@ -23,39 +23,42 @@ class LZ4Tests: XCTestCase {
             inputBuffer.initialize(from: asUnsigned, count: size)
         }
         defer {
-//            inputBuffer.deallocate()
+            inputBuffer.deallocate()
         }
-        let outputBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: size)
+        let outputBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: size * 2)
         outputBuffer.initialize(repeating: 0, count: size)
 
         let os = OutputStream(toBuffer: outputBuffer, capacity: size * 2)
         os.open()
 
-//        let output = LZ4FrameOutputStream(sink: os)
+        let output = LZ4FrameOutputStream(sink: os)
 
-//        let firstWrittenCall = output.write(inputBuffer, maxLength: size)
-//        XCTAssertEqual(7, firstWrittenCall) // on first write, we'll just be flushing the header
-//
-//        output.close()
-//        os.close()
+        let firstWriteCall = output.write(inputBuffer, maxLength: size)
+        XCTAssertEqual(7, firstWriteCall) // on first write, we'll just be flushing the header
 
-//        let d = Data(buffer: UnsafeMutableBufferPointer(start: outputBuffer, count: output.totalBytesWritten))
-//        let inputStream = InputStream(data: d)
-//        inputStream.open()
-//        let decompressor = LZ4FrameInputStream(source: inputStream)
-//
-//        defer {
-//            inputStream.close()
-//            decompressor.close()
-//        }
-//
-//        var outputString = ""
-//
-//        while let bytes = decompressor.next() {
-//            outputString += bytes.toString()
-//        }
-//
-//        XCTAssertEqual(inputString, outputString)
+        output.close()
+
+        XCTAssertEqual(58, output.totalBytesWritten)
+
+        let d = Data(buffer: UnsafeMutableBufferPointer(start: outputBuffer, count: output.totalBytesWritten))
+        let inputStream = InputStream(data: d)
+        inputStream.open()
+        let decompressor = LZ4FrameInputStream(source: inputStream)
+
+        defer {
+            inputStream.close()
+            decompressor.close()
+            outputBuffer.deallocate()
+        }
+
+        var outputString = ""
+
+        while let bytes = decompressor.next() {
+            outputString += bytes.toString()
+        }
+
+        // did we get back what we put in?
+        XCTAssertEqual(inputString, outputString)
     }
 
 //    func testDecompression() {

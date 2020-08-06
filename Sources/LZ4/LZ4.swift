@@ -17,14 +17,13 @@ public final class LZ4FrameOutputStream: OutputStream {
 
     private let logger = Logger(label: "LZ4OutputStream")
 
-    private let bufferSize: Int
     private let frameInfo: LZ4F_frameInfo_t
     private let outBufCapacity: Int
 
-    private var ctx: UnsafeMutablePointer<OpaquePointer?>
+    private let ctx: UnsafeMutablePointer<OpaquePointer?>
     private var prefs: LZ4F_preferences_t
     private var headerWritten: Bool
-    private var outputBuffer: UnsafeMutablePointer<UInt8>
+    private let outputBuffer: UnsafeMutablePointer<UInt8>
     private let sink: OutputStream
     private var bytesWritten: Int = 0
 
@@ -34,7 +33,6 @@ public final class LZ4FrameOutputStream: OutputStream {
     }
 
     public init(sink: OutputStream, bufferSize: Int = LZ4.defaultBufferSize) {
-        self.bufferSize = bufferSize
         self.headerWritten = false
         self.frameInfo = LZ4F_frameInfo_t(blockSizeID: LZ4F_max256KB, blockMode: LZ4F_blockLinked, contentChecksumFlag: LZ4F_noContentChecksum, frameType: LZ4F_frame, contentSize: 0, dictID: 0, blockChecksumFlag: LZ4F_noBlockChecksum)
         self.prefs = LZ4F_preferences_t(frameInfo: frameInfo, compressionLevel: 0, autoFlush: 0, favorDecSpeed: 0, reserved: (0,0,0))
@@ -61,7 +59,7 @@ public final class LZ4FrameOutputStream: OutputStream {
         var headerSize = 0
         if !headerWritten {
             headerSize = LZ4F_compressBegin(ctx.pointee, outputBuffer, outBufCapacity, &prefs)
-            if LZ4F_isError(headerSize) != 0 {
+            if lz4Error(headerSize) {
                 logger.critical("Unable to generate LZ4 header")
                 return -1
             }
@@ -76,8 +74,8 @@ public final class LZ4FrameOutputStream: OutputStream {
         }
 
         let compressed = LZ4F_compressUpdate(ctx.pointee, outputBuffer, outBufCapacity, buffer, len, nil)
-        if LZ4F_isError(compressed as LZ4F_errorCode_t) != 0 {
-            logger.error("oh no")
+        if lz4Error(compressed) {
+            return -1
         }
 
         if compressed > 0 {
@@ -94,11 +92,19 @@ public final class LZ4FrameOutputStream: OutputStream {
 
     private func finish() -> Int {
         let compressed = LZ4F_compressEnd(ctx.pointee, outputBuffer, outBufCapacity, nil)
+
+        if lz4Error(compressed) {
+            return -1
+        }
+
         return sink.write(outputBuffer, maxLength: compressed)
     }
 
     public override func close() {
         let trailer = finish()
+
+        outputBuffer.deallocate()
+        LZ4F_freeCompressionContext(ctx.pointee)
 
         if trailer <= 0 {
             logger.error("Unable to write end of LZ4 stream!")
@@ -106,9 +112,14 @@ public final class LZ4FrameOutputStream: OutputStream {
         }
 
         bytesWritten += trailer
+    }
 
-        outputBuffer.deallocate()
-        LZ4F_freeCompressionContext(ctx.pointee)
+    private func lz4Error(_ err: LZ4F_errorCode_t) -> Bool {
+        if LZ4F_isError(err) != 0 {
+            logger.error("LZ4 Frame error: \(String(cString: LZ4F_getErrorName(err)))")
+            return true
+        }
+        return false
     }
 }
 
