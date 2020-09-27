@@ -1,3 +1,9 @@
+/*
+ Copyright 2020 TupleStream OÜ
+
+ See the LICENSE file for license information
+ SPDX-License-Identifier: Apache-2.0
+*/
 import XCTest
 import class Foundation.Bundle
 import LZ4
@@ -6,6 +12,27 @@ extension Array where Element == UInt8 {
 
     func toString() -> String {
         return String(bytes: self, encoding: .utf8)!
+    }
+}
+
+class StringOutputStream: OutputStream {
+
+    private var outputString: String = ""
+
+    override func write(_ buffer: UnsafePointer<UInt8>, maxLength len: Int) -> Int {
+        let data = Data(bytes: buffer, count: len)
+        outputString += String(data: data, encoding: .utf8)!
+        return len
+    }
+
+    override var description: String {
+        get {
+            return outputString
+        }
+    }
+
+    var size: Int {
+        return outputString.count
     }
 }
 
@@ -43,6 +70,8 @@ class LZ4Tests: XCTestCase {
         let d = Data(buffer: UnsafeMutableBufferPointer(start: outputBuffer, count: output.totalBytesWritten))
         let inputStream = InputStream(data: d)
         inputStream.open()
+
+        // decompression
         let decompressor = LZ4FrameInputStream(source: inputStream)
 
         defer {
@@ -61,19 +90,19 @@ class LZ4Tests: XCTestCase {
         XCTAssertEqual(inputString, outputString)
     }
 
-//    func testDecompression() {
-//        let file = InputStream(fileAtPath: "/Users/chris/Desktop/install.log.lz4")!
-//        file.open()
-//
-//        let decompressor = LZ4FrameInputStream(source: file)
-//
-//        var outputString = ""
-//
-//        while let decompressedBytes = decompressor.next() {
-//            outputString += decompressedBytes.toString()
-//        }
-//
-//        file.close()
-//        decompressor.close()
-//    }
+    func testDecompression() {
+        let file = InputStream(fileAtPath: "/Users/chris/Desktop/install.log.lz4")!
+        file.open()
+
+        let decompressor = LZ4FrameInputStream(source: file)
+        defer { decompressor.close() }
+
+        let output = StringOutputStream()
+        decompressor.readAll(sink: output)
+
+        file.close()
+
+        print(decompressor.bytesRead)
+        print(output.size)
+    }
 }

@@ -1,10 +1,9 @@
-//
-//  LZ4.swift
-//  
-//
-//  Created by Chris Mowforth on 01/03/2020.
-//
+/*
+ Copyright 2020 TupleStream OÜ
 
+ See the LICENSE file for license information
+ SPDX-License-Identifier: Apache-2.0
+*/
 import Foundation
 import Logging
 import lz4Native
@@ -26,6 +25,7 @@ public final class LZ4FrameOutputStream: OutputStream {
     private let outputBuffer: UnsafeMutablePointer<UInt8>
     private let sink: OutputStream
     private var bytesWritten: Int = 0
+    private var closed: Bool = false
 
     public override convenience required init(toMemory: ()) {
         let os = OutputStream(toMemory: ())
@@ -140,6 +140,7 @@ public final class LZ4FrameInputStream: Sequence, IteratorProtocol {
     private let source: InputStream
     private var blockSize: size_t?
     private var dstSize: size_t
+    public var bytesRead: Int = 0
 
     public init(source: InputStream) {
         self.ctx = UnsafeMutablePointer<OpaquePointer?>.allocate(capacity: MemoryLayout<LZ4F_compressionContext_t>.size)
@@ -155,6 +156,58 @@ public final class LZ4FrameInputStream: Sequence, IteratorProtocol {
         self.scratchbuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: LZ4.defaultBufferSize)
         scratchbuffer.initialize(repeating: 0, count: LZ4.defaultBufferSize)
         self.dstSize = 0
+    }
+
+    public func readAll(sink: OutputStream) {
+        readHeader()
+        var ret = 1
+
+        // decompression
+        while ret != 0 {
+            // read raw bytes from source
+            let rawAmountRead = source.read(scratchbuffer, maxLength: LZ4.defaultBufferSize)
+            bytesRead += rawAmountRead
+
+            assert(rawAmountRead >= 0, "Unable to read stream")
+
+            if rawAmountRead == 0 {
+                logger.debug("Reached end of stream")
+                return
+            }
+
+            // start & end boundaries
+            let srcEndPtr = scratchbuffer.advanced(by: rawAmountRead)
+            var srcStartPtr = scratchbuffer
+
+            while srcStartPtr < srcEndPtr && ret != 0 {
+                dstSize = blockSize!
+                var srcSize = srcStartPtr.distance(to: srcEndPtr)
+
+                ret = LZ4F_decompress(ctx.pointee, iteratorBuffer, &dstSize, srcStartPtr, &srcSize, nil)
+
+                if lz4Error(ret) {
+                    return
+                }
+
+                if dstSize != 0 {
+                    // flush
+                    sink.write(iteratorBuffer!, maxLength: dstSize)
+                }
+
+                // update input bounds
+                srcStartPtr = srcStartPtr.advanced(by: srcSize)
+            }
+
+            assert(srcStartPtr <= srcEndPtr)
+
+//            print("\(rawAmountRead)")
+
+            if srcStartPtr < srcEndPtr {
+                print("TRAILING")
+            }
+        }
+
+        return
     }
 
     public func next() -> [UInt8]? {
@@ -235,6 +288,7 @@ public final class LZ4FrameInputStream: Sequence, IteratorProtocol {
         iteratorBuffer!.initialize(repeating: 0, count: blockSize!)
 
         headerRead = true
+        bytesRead += LZ4FrameInputStream.headerSize
     }
 
     private func lz4Error(_ err: LZ4F_errorCode_t) -> Bool {
