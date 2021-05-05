@@ -8,13 +8,6 @@ import XCTest
 import class Foundation.Bundle
 import LZ4
 
-extension InputStream: ReadableStream {
-
-    public func read(_ buffer: UnsafeMutablePointer<UInt8>, length: Int) -> Int {
-        return self.read(buffer, maxLength: length)
-    }
-}
-
 class LZ4Tests: XCTestCase {
 
     func testCompressionDecompressionSmallInput() {
@@ -43,7 +36,7 @@ class LZ4Tests: XCTestCase {
         let decompressor = LZ4FrameInputStream(source: wibble)
         defer { decompressor.close() }
 
-        let finalOutput = StringStream()
+        let finalOutput = BufferedMemoryStream()
 
         let t = decompressor.readAll(sink: finalOutput)
         XCTAssertEqual(data.count, t)
@@ -53,21 +46,4 @@ class LZ4Tests: XCTestCase {
 
         remove("/tmp/test-swift-lz.lz4")
     }
-
-//    func testDecompression() {
-//        let file = InputStream(fileAtPath: "/Users/chris/Desktop/install.log.lz4")!
-//        file.open()
-//        defer { file.close() }
-//
-//        let decompressor = LZ4FrameInputStream(source: file)
-//        defer { decompressor.close() }
-//
-//        let output = BufferedMemoryStream()
-//        decompressor.readAll(sink: output)
-//
-//        file.close()
-//
-//        print(decompressor.bytesRead)
-//        print(output.size)
-//    }
 }
