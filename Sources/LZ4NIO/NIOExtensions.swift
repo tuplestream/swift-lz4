@@ -16,11 +16,6 @@ extension InputStream: ReadableStream {
     }
 }
 
-//public extension BufferedMemoryStream {
-//
-//    public init 
-//}
-
 public extension ByteBuffer {
 
     func lz4Compress() -> ByteBuffer {
@@ -46,6 +41,7 @@ public extension ByteBuffer {
 
         let source = BufferedMemoryStream(startData: Data(buffer: self, byteTransferStrategy: .noCopy))
         let decompressor = LZ4FrameInputStream(source: source)
+//        using InputStream as source works, still not sure why
 //        let source = InputStream(fileAtPath: "/Users/chris/Desktop/out.lz4")
 //        source?.open()
 //        let decompressor = LZ4FrameInputStream(source: source!)

@@ -26,7 +26,7 @@ class NIOTests: XCTestCase {
         XCTAssertEqual(0, decompressed.readableBytes)
     }
 
-    func testSomething() {
+    func testDecompressSimpleString() {
         let stringData = "the quick brown fox jumps over the lazy dog"
         let startBuffer = NIOTests.allocator.buffer(string: stringData)
 
