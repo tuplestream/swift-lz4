@@ -41,7 +41,7 @@ import LZ4NIO
 
 #### Simple example
 
-```
+```swift
 // 3) Using NIO extensions is the most convenient way to get started
 import NIO
 import LZ4NIO
