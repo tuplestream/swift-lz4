@@ -58,7 +58,8 @@ public class BufferedMemoryStream: BidirectionalStream, Equatable, GreedyStream 
         }
 
         let maxTransferrable = min(size - readerIndex, length)
-        internalRepresentation.copyBytes(to: buffer, from: readerIndex..<maxTransferrable)
+        let readerLastIndex  = readerIndex + maxTransferrable
+        internalRepresentation.copyBytes(to: buffer, from: readerIndex..<readerLastIndex)
         readerIndex += maxTransferrable
 
         return maxTransferrable
