@@ -27,22 +27,12 @@ class NIOTests: XCTestCase {
     }
 
     func testDecompressSimpleString() {
-        let stringData = "the quick brown fox jumps over the lazy dog"
+        let stringData = "the quick brown fox jumps over the lazy dog 🐶"
         let startBuffer = NIOTests.allocator.buffer(string: stringData)
 
         let compressed = startBuffer.lz4Compress()
 
-        XCTAssertEqual(58, compressed.readableBytes)
-
-//        let os = OutputStream(toFileAtPath: "/Users/chris/Desktop/out.lz4", append: false)!
-//        os.open()
-//
-//        compressed.withUnsafeReadableBytes { ptr in
-//            let start = UnsafePointer<UInt8>.init(ptr.baseAddress?.assumingMemoryBound(to: UInt8.self))!
-//            os.write(start, maxLength: ptr.count)
-//        }
-//
-//        os.close()
+        XCTAssertEqual(63, compressed.readableBytes)
 
         var decompressed = compressed.lz4Decompress()
         let decompressedString = decompressed.readString(length: decompressed.readableBytes)

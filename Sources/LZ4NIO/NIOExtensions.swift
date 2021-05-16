@@ -41,16 +41,15 @@ public extension ByteBuffer {
 
         let source = BufferedMemoryStream(startData: Data(buffer: self, byteTransferStrategy: .noCopy))
         let decompressor = LZ4FrameInputStream(source: source)
-//        using InputStream as source works, still not sure why
-//        let source = InputStream(fileAtPath: "/Users/chris/Desktop/out.lz4")
-//        source?.open()
-//        let decompressor = LZ4FrameInputStream(source: source!)
+
         defer { decompressor.close() }
         let sink = BufferedMemoryStream()
 
         let totalRead = decompressor.readAll(sink: sink)
 
-        print("TOTAL READ = \(totalRead)")
+        if totalRead <= 0 {
+            return ByteBuffer()
+        }
 
         return ByteBuffer(data: sink.internalRepresentation)
     }
