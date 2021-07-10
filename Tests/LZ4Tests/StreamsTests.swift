@@ -33,9 +33,7 @@ public class StreamsTests: XCTestCase {
 
         let first = BufferedMemoryStream(string: "")
 
-        let bytesWritten = raw.withUnsafeBytes {
-            first.write($0, length: raw.count)
-        }
+        let bytesWritten = first.write(raw.bytes, length: raw.bytes.count)
 
         XCTAssertEqual(foo.count, bytesWritten)
         XCTAssertEqual(foo, first.description)
@@ -46,15 +44,4 @@ public class StreamsTests: XCTestCase {
 
         XCTAssertEqual(foo, second.description)
     }
-
-//    func testFileWrite() {
-//        let fileStream = FileStream(filename: "/Users/chris/Desktop/test.txt")
-//        defer { fileStream.close() }
-//
-//        let data = "the quick brown fox jumps over the lazy dog".data(using: .utf8)!
-//
-//        data.withUnsafeBytes({
-//            fileStream.write($0, length: data.count)
-//        })
-//    }
 }

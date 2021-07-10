@@ -19,6 +19,7 @@ class NIOTests: XCTestCase {
         let compressed = emptyInput.lz4Compress()
         let decompressed = compressed.lz4Decompress()
 
+        XCTAssertTrue(emptyInput == compressed)
         XCTAssertEqual(compressed, decompressed)
         XCTAssertEqual(emptyInput, compressed)
 
@@ -38,5 +39,19 @@ class NIOTests: XCTestCase {
         let decompressedString = decompressed.readString(length: decompressed.readableBytes)
 
         XCTAssertEqual(stringData, decompressedString!)
+    }
+
+    func testByteBufferWriter() {
+        let writer = ByteBufferLZ4Writer()
+
+        writer.write(ByteBuffer(string: "hello"))
+        writer.write(ByteBuffer(string: "world"))
+
+        let compressed = writer.getCompressed()
+        var decompressed = compressed.lz4Decompress()
+
+        let decompressedString = decompressed.readString(length: decompressed.readableBytes, encoding: .utf8)
+
+        XCTAssertEqual("helloworld", decompressedString!)
     }
 }

@@ -112,7 +112,10 @@ public final class LZ4FrameOutputStream: LZ4Capable {
         return sink.write(outputBuffer, length: compressed)
     }
 
+    public private(set) var isClosed: Bool = false
+
     public func close() {
+        precondition(!isClosed)
         let trailer = finish()
 
         outputBuffer.deallocate()
@@ -124,6 +127,7 @@ public final class LZ4FrameOutputStream: LZ4Capable {
         }
 
         bytesWritten += trailer
+        isClosed = true
     }
 }
 

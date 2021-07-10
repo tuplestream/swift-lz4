@@ -8,24 +8,31 @@ import XCTest
 import class Foundation.Bundle
 import LZ4
 
+extension Data {
+    var bytes: [UInt8] {
+        return [UInt8](self)
+    }
+}
+
 class LZ4Tests: XCTestCase {
 
     func testCompressionDecompressionSmallInput() {
         let inputString = "the quick brown fox jumps over the lazy dog"
         let sink = FileStream(filename: "/tmp/test-swift-lz.lz4")
         let compressor = LZ4FrameOutputStream(sink: sink)
+        XCTAssertFalse(compressor.isClosed)
 
         // compression
         let data = inputString.data(using: .utf8)!
 
-        let firstWrite = data.withUnsafeBytes({
-            compressor.write($0, length: data.count)
-        })
+        let firstWrite = compressor.write(data.bytes, length: data.bytes.count)
 
+        XCTAssertFalse(compressor.isClosed)
         XCTAssertEqual(7, firstWrite) // on first write, we'll just be flushing the header
 
         compressor.close()
         sink.close()
+        XCTAssertTrue(compressor.isClosed)
 
         XCTAssertEqual(58, compressor.totalBytesWritten)
         XCTAssertEqual(58, sink.size)
@@ -34,7 +41,9 @@ class LZ4Tests: XCTestCase {
         wibble.open()
 
         let decompressor = LZ4FrameInputStream(source: wibble)
-        defer { decompressor.close() }
+        defer {
+            decompressor.close()
+        }
 
         let finalOutput = BufferedMemoryStream()
 
