@@ -54,3 +54,27 @@ public extension ByteBuffer {
         return ByteBuffer(data: sink.internalRepresentation)
     }
 }
+
+public final class ByteBufferLZ4Writer {
+
+    private let sink: BufferedMemoryStream
+    private let writer: LZ4FrameOutputStream
+
+    public init() {
+        self.sink = BufferedMemoryStream()
+        self.writer = LZ4FrameOutputStream(sink: sink)
+    }
+
+    public func write(_ buffer: ByteBuffer) {
+        if buffer.readableBytes == 0 {
+            return
+        }
+        let _ = writer.write(buffer.getBytes(at: 0, length: buffer.readableBytes)!, length: buffer.readableBytes)
+    }
+
+    public func getCompressed() -> ByteBuffer {
+        writer.close()
+        sink.close()
+        return ByteBuffer(data: sink.internalRepresentation)
+    }
+}
