@@ -72,7 +72,11 @@ public final class ByteBufferLZ4Writer {
         let _ = writer.write(buffer.getBytes(at: 0, length: buffer.readableBytes)!, length: buffer.readableBytes)
     }
 
-    public func getCompressed() -> ByteBuffer {
+    public func getCompressed() -> ByteBuffer? {
+        if writer.isClosed {
+            return nil
+        }
+
         writer.close()
         sink.close()
         return ByteBuffer(data: sink.internalRepresentation)
