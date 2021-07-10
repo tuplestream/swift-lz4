@@ -48,7 +48,11 @@ class NIOTests: XCTestCase {
         writer.write(ByteBuffer(string: "world"))
 
         let compressed = writer.getCompressed()
-        var decompressed = compressed.lz4Decompress()
+        XCTAssertNotNil(compressed)
+        // (if we call getCompressed() a second time on the writer we'll get nothing back
+        XCTAssertNil(writer.getCompressed())
+
+        var decompressed = compressed!.lz4Decompress()
 
         let decompressedString = decompressed.readString(length: decompressed.readableBytes, encoding: .utf8)
 
