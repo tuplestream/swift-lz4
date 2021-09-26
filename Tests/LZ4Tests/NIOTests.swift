@@ -12,10 +12,8 @@ import LZ4NIO
 
 class NIOTests: XCTestCase {
 
-    static let allocator = ByteBufferAllocator()
-
     func testEndToEndEmptyBuffer() {
-        let emptyInput = NIOTests.allocator.buffer(bytes: [])
+        var emptyInput = ByteBuffer()
         let compressed = emptyInput.lz4Compress()
         let decompressed = compressed.lz4Decompress()
 
@@ -29,7 +27,7 @@ class NIOTests: XCTestCase {
 
     func testDecompressSimpleString() {
         let stringData = "the quick brown fox jumps over the lazy dog 🐶"
-        let startBuffer = NIOTests.allocator.buffer(string: stringData)
+        var startBuffer = ByteBuffer(string: stringData)
 
         let compressed = startBuffer.lz4Compress()
 
@@ -57,5 +55,25 @@ class NIOTests: XCTestCase {
         let decompressedString = decompressed.readString(length: decompressed.readableBytes, encoding: .utf8)
 
         XCTAssertEqual("helloworld", decompressedString!)
+    }
+
+    func testCompressionDecompressionLargeInput() {
+        var data = ByteBuffer()
+        var string: String = ""
+        for _ in 0...50000 {
+            string += randomString(length: 16)
+        }
+
+        data.writeString(string)
+        let compressed = data.lz4Compress()
+
+        var decompressed = compressed.lz4Decompress()
+        let decompressedString = decompressed.readString(length: decompressed.readableBytes)
+        XCTAssertEqual(string, decompressedString)
+    }
+
+    private func randomString(length: Int) -> String {
+      let letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+      return String((0..<length).map{ _ in letters.randomElement()! })
     }
 }

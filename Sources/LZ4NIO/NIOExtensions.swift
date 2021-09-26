@@ -18,7 +18,7 @@ extension InputStream: ReadableStream {
 
 public extension ByteBuffer {
 
-    func lz4Compress() -> ByteBuffer {
+    mutating func lz4Compress() -> ByteBuffer {
         if self.readableBytes == 0 {
             return self
         }
@@ -26,8 +26,10 @@ public extension ByteBuffer {
         let sink = BufferedMemoryStream()
         let writer = LZ4FrameOutputStream(sink: sink)
 
-        let written = writer.write(self.getBytes(at: 0, length: self.readableBytes)!, length: self.readableBytes)
-        assert(written == 7, "expected 7-byte header to be written initially")
+        while self.readableBytes > 0 {
+            let toWrite = min(self.readableBytes, writer.outputBufferCapacity)
+            let _ = writer.write(self.readBytes(length: toWrite)!, length: toWrite)
+        }
 
         writer.close()
         sink.close()

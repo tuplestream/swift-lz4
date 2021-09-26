@@ -16,6 +16,7 @@ extension NIOTests {
     // to regenerate.
     static let __allTests__NIOTests = [
         ("testByteBufferWriter", testByteBufferWriter),
+        ("testCompressionDecompressionLargeInput", testCompressionDecompressionLargeInput),
         ("testDecompressSimpleString", testDecompressSimpleString),
         ("testEndToEndEmptyBuffer", testEndToEndEmptyBuffer),
     ]
