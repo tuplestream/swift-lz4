@@ -14,7 +14,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-log.git", from: "1.0.0"),
-        .package(url: "https://github.com/apple/swift-nio.git", from: "2.0.0")
+        .package(url: "https://github.com/apple/swift-nio.git", from: "2.0.0"),
     ],
     targets: [
         .systemLibrary(name: "lz4Native", pkgConfig: "liblz4"),
@@ -34,6 +34,9 @@ let package = Package(
         ),
         .testTarget(
             name: "LZ4Tests",
-            dependencies: ["LZ4", "LZ4NIO"]),
+            dependencies: [
+                .byName(name: "LZ4"),
+                .byName(name: "LZ4NIO"),
+            ]),
     ]
 )

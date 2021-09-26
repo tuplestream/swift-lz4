@@ -35,7 +35,7 @@ public final class LZ4FrameOutputStream: LZ4Capable {
     internal let logger = Logger(label: "LZ4OutputStream")
 
     private let frameInfo: LZ4F_frameInfo_t
-    private let outBufCapacity: Int
+    public let outputBufferCapacity: Int
 
     private let ctx: UnsafeMutablePointer<OpaquePointer?>
     private var prefs: LZ4F_preferences_t
@@ -47,17 +47,17 @@ public final class LZ4FrameOutputStream: LZ4Capable {
 
     public init(sink: WriteableStream, bufferSize: Int = LZ4.defaultBufferSize) {
         self.headerWritten = false
-        self.frameInfo = LZ4F_frameInfo_t(blockSizeID: LZ4F_max256KB, blockMode: LZ4F_blockLinked, contentChecksumFlag: LZ4F_noContentChecksum, frameType: LZ4F_frame, contentSize: 0, dictID: 0, blockChecksumFlag: LZ4F_noBlockChecksum)
+        self.frameInfo = LZ4F_frameInfo_t(blockSizeID: LZ4F_max4MB, blockMode: LZ4F_blockLinked, contentChecksumFlag: LZ4F_noContentChecksum, frameType: LZ4F_frame, contentSize: 0, dictID: 0, blockChecksumFlag: LZ4F_noBlockChecksum)
         self.prefs = LZ4F_preferences_t(frameInfo: frameInfo, compressionLevel: 0, autoFlush: 0, favorDecSpeed: 0, reserved: (0,0,0))
-        self.outBufCapacity = LZ4F_compressBound(bufferSize, &prefs)
+        self.outputBufferCapacity = LZ4F_compressBound(bufferSize, &prefs)
 
         self.ctx = UnsafeMutablePointer<OpaquePointer?>.allocate(capacity: MemoryLayout<LZ4F_compressionContext_t>.size)
         let creation = LZ4F_createCompressionContext(ctx, UInt32(LZ4F_VERSION))
         if LZ4F_isError(creation) != 0 {
             logger.critical("Couldn't create LZ4F compression context")
         }
-        self.outputBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: outBufCapacity)
-        outputBuffer.initialize(repeating: 0, count: outBufCapacity)
+        self.outputBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: outputBufferCapacity)
+        outputBuffer.initialize(repeating: 0, count: outputBufferCapacity)
         self.sink = sink
     }
 
@@ -70,7 +70,7 @@ public final class LZ4FrameOutputStream: LZ4Capable {
     public func write(_ buffer: UnsafePointer<UInt8>, length: Int) -> Int {
         var headerSize = 0
         if !headerWritten {
-            headerSize = LZ4F_compressBegin(ctx.pointee, outputBuffer, outBufCapacity, &prefs)
+            headerSize = LZ4F_compressBegin(ctx.pointee, outputBuffer, outputBufferCapacity, &prefs)
             if lz4Error(headerSize) {
                 logger.critical("Unable to generate LZ4 header")
                 return -1
@@ -85,7 +85,7 @@ public final class LZ4FrameOutputStream: LZ4Capable {
             headerWritten = true
         }
 
-        let compressed = LZ4F_compressUpdate(ctx.pointee, outputBuffer, outBufCapacity, buffer, length, nil)
+        let compressed = LZ4F_compressUpdate(ctx.pointee, outputBuffer, outputBufferCapacity, buffer, length, nil)
         if lz4Error(compressed) {
             return -1
         }
@@ -103,7 +103,7 @@ public final class LZ4FrameOutputStream: LZ4Capable {
     }
 
     private func finish() -> Int {
-        let compressed = LZ4F_compressEnd(ctx.pointee, outputBuffer, outBufCapacity, nil)
+        let compressed = LZ4F_compressEnd(ctx.pointee, outputBuffer, outputBufferCapacity, nil)
 
         if lz4Error(compressed) {
             return -1
@@ -210,7 +210,7 @@ public final class LZ4FrameInputStream: LZ4Capable, GreedyStream {
             assert(srcStartPtr <= srcEndPtr)
 
             if srcStartPtr < srcEndPtr {
-                print("TRAILING")
+                logger.warning("Unhandled trailing LZ4 frame!")
             }
         }
 
